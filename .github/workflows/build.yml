@@ -13,17 +13,38 @@ jobs:
       run: |
         git config --global url."https://".insteadOf git://
 
-    # Шаг 2: Скачивание основного репозитория (без сабмодулей, их скачает Docker)
+    # Шаг 2: Скачивание основного репозитория
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # Шаг 3: Исправляем Dockerfile (архивные репозитории + проброс настройки Git внутрь контейнера)
-    - name: Fix Dockerfile for EOL repos and Git protocol inside container
+    # Шаг 3: Полная перезапись Dockerfile правильным и рабочим содержимым
+    - name: Rewrite Dockerfile with fixed repos and git rules
       run: |
-        # Исправляем репозитории Debian Buster
-        sed -i '/FROM debian:buster/a RUN echo "deb http://debian.org buster main\\ndeb http://debian.org-security buster/updates main" > /etc/apt/sources.list' Dockerfile
-        # Принудительно заставляем Git внутри Docker использовать HTTPS вместо git://
-        sed -i '/FROM debian:buster/a RUN git config --global url."https://".insteadOf git://' Dockerfile
+        cat << 'EOF' > Dockerfile
+        FROM debian:buster
+
+        # 1. Сразу чиним репозитории, переключая их на архив
+        RUN echo "deb http://debian.org buster main\ndeb http://debian.org-security buster/updates main" > /etc/apt/sources.list
+
+        # 2. Обновляем систему и устанавливаем пакеты (включая git)
+        RUN apt-get update && \
+            apt-get install -y gawk wget git-core diffstat unzip texinfo gcc-multilib build-essential chrpath socat cpio python python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping locales liblz4-tool zstd
+
+        # 3. ТОЛЬКО ТЕПЕРЬ, когда git установлен, настраиваем перенаправление протокола
+        RUN git config --global url."https://".insteadOf git://
+
+        ENV LC_ALL=en_US.UTF-8
+        ENV LANG=en_US.UTF-8
+        ENV LANGUAGE=en_US.UTF-8
+
+        RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
+            locale-gen
+
+        RUN useradd -m build
+        USER build
+        ENV HOME=/home/build
+        WORKDIR /home/build
+        EOF
 
     # Шаг 4: Очистка диска
     - name: Free up disk space
@@ -45,3 +66,5 @@ jobs:
       with:
         name: pitrezor-rpi0-image
         path: imgs/*.zip
+
+
