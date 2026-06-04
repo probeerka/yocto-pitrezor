@@ -8,11 +8,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    # Шаг 1: Настройка глобального правила для обхода блокировки git:// протокола
+    - name: Configure Git to use HTTPS instead of GIT protocol
+      run: |
+        git config --global url."https://".insteadOf git://
+
+    # Шаг 2: Скачивание репозитория вместе со всеми зависимостями
     - name: Checkout repository
       uses: actions/checkout@v4
       with:
         submodules: 'recursive'
 
+    # Шаг 3: Очистка диска (Yocto требует много места)
     - name: Free up disk space
       run: |
         sudo rm -rf /usr/share/dotnet
@@ -20,11 +27,13 @@ jobs:
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
+    # Шаг 4: Запуск компиляции в Docker
     - name: Run Build Script in Docker
       run: |
         chmod +x build-pitrezor.sh
         ./build-pitrezor.sh master raspberrypi0-wifi
 
+    # Шаг 5: Сохранение готового образа
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
