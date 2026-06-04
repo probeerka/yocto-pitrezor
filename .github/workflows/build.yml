@@ -17,7 +17,7 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-      # Шаг 3: Полная перезапись Dockerfile правильным и рабочим содержимым
+    # Шаг 3: Полная перезапись Dockerfile правильным и рабочим содержимым
     - name: Rewrite Dockerfile with fixed repos and git rules
       run: |
         cat << 'EOF' > Dockerfile
@@ -25,7 +25,7 @@ jobs:
 
         # 1. Чиним репозитории, используя раздельные команды записи
         RUN echo "deb http://debian.org buster main" > /etc/apt/sources.list
-        RUN echo "deb http://debian.org-security buster/updates main" >> /etc/apt/sources.list
+        RUN echo "deb http://debian.org buster/updates main" >> /etc/apt/sources.list
 
         # 2. Обновляем систему и устанавливаем пакеты (включая git)
         RUN apt-get update && \
@@ -46,6 +46,7 @@ jobs:
         ENV HOME=/home/build
         WORKDIR /home/build
         EOF
+
 
     # Шаг 4: Очистка диска
     - name: Free up disk space
