@@ -17,40 +17,35 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # Шаг 3: Полная перезапись Dockerfile правильным и рабочим содержимым
-    - name: Rewrite Dockerfile with fixed repos and git rules
+    # Шаг 3: Полная перезапись Dockerfile правильным и рабочим содержимым    # Шаг 3: Полная перезапись Dockerfile на базе стабильной Ubuntu 22.04
+    - name: Rewrite Dockerfile with modern base image
       run: |
         cat << 'EOF' > Dockerfile
-        FROM debian:buster
+        FROM ubuntu:22.04
 
-        # 1. Отключаем проверку протухших SSL-сертификатов и времени действия репозиториев
-        RUN echo "Acquire::Check-Valid-Until \"false\";" > /etc/apt/apt.conf.d/99no-check
-        RUN echo "Acquire::AllowInsecureRepositories \"true\";" >> /etc/apt/apt.conf.d/99no-check
-        RUN echo "Acquire::allow-allow-insecure \"true\";" >> /etc/apt/apt.conf.d/99no-check
+        # Отключаем интерактивные диалоги при установке пакетов
+        ENV DEBIAN_FRONTEND=noninteractive
 
-        # 2. Жестко прописываем только архивные репозитории БЕЗ https
-        RUN echo "deb http://debian.org buster main contrib free" > /etc/apt/sources.list
-        RUN echo "deb http://debian.org buster/updates main contrib free" >> /etc/apt/sources.list
+        # Обновляем систему и ставим актуальные пакеты сборки Yocto
+        RUN apt-get update && \
+            apt-get install -y gawk wget git-core diffstat unzip texinfo gcc-multilib build-essential chrpath socat cpio python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping locales liblz4-tool zstd python-is-python3
 
-        # 3. Обновляем систему с игнорированием ошибок подписей и ставим пакеты
-        RUN apt-get update --allow-insecure-repositories && \
-            apt-get install -y --allow-unauthenticated gawk wget git-core diffstat unzip texinfo gcc-multilib build-essential chrpath socat cpio python python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping locales liblz4-tool zstd
-
-        # 4. Настраиваем перенаправление протокола для Git
+        # Настраиваем принудительный обход заблокированного git:// протокола
         RUN git config --global url."https://".insteadOf git://
 
+        # Настройка локали en_US.UTF-8 (обязательно для BitBake)
+        RUN locale-gen en_US.UTF-8
         ENV LC_ALL=en_US.UTF-8
         ENV LANG=en_US.UTF-8
         ENV LANGUAGE=en_US.UTF-8
 
-        RUN sed -i -e 's/# en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
-            locale-gen
-
-        RUN useradd -m build
+        # Создаем изолированного пользователя для сборки (BitBake запрещено пускать под root)
+        RUN useradd -m build && chown -R build:build /home/build
         USER build
         ENV HOME=/home/build
         WORKDIR /home/build
         EOF
+
     # Шаг 4: Очистка диска
     - name: Free up disk space
       run: |
