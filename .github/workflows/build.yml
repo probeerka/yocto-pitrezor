@@ -27,11 +27,12 @@ jobs:
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
-    # Шаг 4: Запуск компиляции в Docker
+    # Шаг 4: Запуск компиляции в Docker (с правами sudo)
     - name: Run Build Script in Docker
       run: |
         chmod +x build-pitrezor.sh
-        ./build-pitrezor.sh master raspberrypi0-wifi
+        sudo ./build-pitrezor.sh master raspberrypi0-wifi
+
 
     # Шаг 5: Сохранение готового образа
     - name: Upload Artifact
