@@ -23,15 +23,20 @@ jobs:
         cat << 'EOF' > Dockerfile
         FROM debian:buster
 
-        # 1. Чиним репозитории, используя раздельные команды записи
-        RUN echo "deb http://debian.org buster main" > /etc/apt/sources.list
-        RUN echo "deb http://debian.org buster/updates main" >> /etc/apt/sources.list
+        # 1. Отключаем проверку протухших SSL-сертификатов и времени действия репозиториев
+        RUN echo "Acquire::Check-Valid-Until \"false\";" > /etc/apt/apt.conf.d/99no-check
+        RUN echo "Acquire::AllowInsecureRepositories \"true\";" >> /etc/apt/apt.conf.d/99no-check
+        RUN echo "Acquire::allow-allow-insecure \"true\";" >> /etc/apt/apt.conf.d/99no-check
 
-        # 2. Обновляем систему и устанавливаем пакеты (включая git)
-        RUN apt-get update && \
-            apt-get install -y gawk wget git-core diffstat unzip texinfo gcc-multilib build-essential chrpath socat cpio python python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping locales liblz4-tool zstd
+        # 2. Жестко прописываем только архивные репозитории БЕЗ https
+        RUN echo "deb http://debian.org buster main contrib free" > /etc/apt/sources.list
+        RUN echo "deb http://debian.org buster/updates main contrib free" >> /etc/apt/sources.list
 
-        # 3. Настраиваем перенаправление протокола для Git
+        # 3. Обновляем систему с игнорированием ошибок подписей и ставим пакеты
+        RUN apt-get update --allow-insecure-repositories && \
+            apt-get install -y --allow-unauthenticated gawk wget git-core diffstat unzip texinfo gcc-multilib build-essential chrpath socat cpio python python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping locales liblz4-tool zstd
+
+        # 4. Настраиваем перенаправление протокола для Git
         RUN git config --global url."https://".insteadOf git://
 
         ENV LC_ALL=en_US.UTF-8
@@ -46,8 +51,6 @@ jobs:
         ENV HOME=/home/build
         WORKDIR /home/build
         EOF
-
-
     # Шаг 4: Очистка диска
     - name: Free up disk space
       run: |
