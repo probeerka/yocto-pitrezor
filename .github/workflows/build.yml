@@ -17,20 +17,21 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # Шаг 3: Полная перезапись Dockerfile правильным и рабочим содержимым
+      # Шаг 3: Полная перезапись Dockerfile правильным и рабочим содержимым
     - name: Rewrite Dockerfile with fixed repos and git rules
       run: |
         cat << 'EOF' > Dockerfile
         FROM debian:buster
 
-        # 1. Сразу чиним репозитории, переключая их на архив
-        RUN echo "deb http://debian.org buster main\ndeb http://debian.org-security buster/updates main" > /etc/apt/sources.list
+        # 1. Чиним репозитории, используя раздельные команды записи
+        RUN echo "deb http://debian.org buster main" > /etc/apt/sources.list
+        RUN echo "deb http://debian.org-security buster/updates main" >> /etc/apt/sources.list
 
         # 2. Обновляем систему и устанавливаем пакеты (включая git)
         RUN apt-get update && \
             apt-get install -y gawk wget git-core diffstat unzip texinfo gcc-multilib build-essential chrpath socat cpio python python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping locales liblz4-tool zstd
 
-        # 3. ТОЛЬКО ТЕПЕРЬ, когда git установлен, настраиваем перенаправление протокола
+        # 3. Настраиваем перенаправление протокола для Git
         RUN git config --global url."https://".insteadOf git://
 
         ENV LC_ALL=en_US.UTF-8
