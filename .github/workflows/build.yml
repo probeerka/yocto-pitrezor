@@ -19,6 +19,14 @@ jobs:
       with:
         submodules: 'recursive'
 
+    # Шаг 3: Исправление устаревших репозиториев Debian Buster в Dockerfile автора
+    - name: Fix EOL Debian Buster repositories in Dockerfile
+      run: |
+        sed -i 's/deb.debian.org/archive.debian.org/g' Dockerfile
+        sed -i 's/security.debian.org/archive.debian.org/g' Dockerfile
+        sed -i '/buster-updates/d' Dockerfile
+        
+
     # Шаг 3: Очистка диска (Yocto требует много места)
     - name: Free up disk space
       run: |
