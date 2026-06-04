@@ -22,9 +22,8 @@ jobs:
     # Шаг 3: Исправление устаревших репозиториев Debian Buster в Dockerfile автора
     - name: Fix EOL Debian Buster repositories in Dockerfile
       run: |
-        sed -i 's/deb.debian.org/archive.debian.org/g' Dockerfile
-        sed -i 's/security.debian.org/archive.debian.org/g' Dockerfile
-        sed -i '/buster-updates/d' Dockerfile
+                sed -i '/FROM debian:buster/a RUN echo "deb http://archive.debian.org/debian buster main\\ndeb http://archive.debian.org/debian-security buster/updates main" > /etc/apt/sources.list' Dockerfile
+
         
 
     # Шаг 3: Очистка диска (Yocto требует много места)
