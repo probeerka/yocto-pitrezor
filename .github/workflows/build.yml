@@ -8,30 +8,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # Шаг 1: Настройка правила для хост-системы
-    - name: Configure Git to use HTTPS instead of GIT protocol
-      run: |
-        git config --global url."https://".insteadOf git://
-
-    # Шаг 2: Скачивание основного репозитория
+    # Шаг 1: Скачивание основного репозитория
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        submodules: false # Отключаем автоматический синк на хосте, сделаем это правильно
 
-    # Шаг 3: Полная перезапись Dockerfile правильным и рабочим содержимым    # Шаг 3: Полная перезапись Dockerfile на базе стабильной Ubuntu 22.04
+    # Шаг 2: Полная перезапись Dockerfile на базе стабильной Ubuntu 22.04
     - name: Rewrite Dockerfile with modern base image
       run: |
         cat << 'EOF' > Dockerfile
         FROM ubuntu:22.04
 
-        # Отключаем интерактивные диалоги при установке пакетов
         ENV DEBIAN_FRONTEND=noninteractive
 
-        # Обновляем систему и ставим актуальные пакеты сборки Yocto
+        # Обновляем систему и ставим актуальные пакеты сборки Yocto + sudo
         RUN apt-get update && \
-            apt-get install -y gawk wget git-core diffstat unzip texinfo gcc-multilib build-essential chrpath socat cpio python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping locales liblz4-tool zstd python-is-python3
-
-        # Настраиваем принудительный обход заблокированного git:// протокола
-        RUN git config --global url."https://".insteadOf git://
+            apt-get install -y gawk wget git diffstat unzip texinfo gcc-multilib build-essential \
+            chrpath socat cpio python3 python3-pip python3-pexpect xz-utils debianutils \
+            iputils-ping locales liblz4-tool zstd python-is-python3 sudo
 
         # Настройка локали en_US.UTF-8 (обязательно для BitBake)
         RUN locale-gen en_US.UTF-8
@@ -40,13 +35,18 @@ jobs:
         ENV LANGUAGE=en_US.UTF-8
 
         # Создаем изолированного пользователя для сборки (BitBake запрещено пускать под root)
-        RUN useradd -m build && chown -R build:build /home/build
+        RUN useradd -m -s /bin/bash build && \
+            echo "build ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
         USER build
         ENV HOME=/home/build
         WORKDIR /home/build
+
+        # Принудительный обход заблокированного git:// протокола ДЛЯ ПОЛЬЗОВАТЕЛЯ build
+        RUN git config --global url."https://".insteadOf git://
         EOF
 
-    # Шаг 4: Очистка диска
+    # Шаг 3: Очистка диска
     - name: Free up disk space
       run: |
         sudo rm -rf /usr/share/dotnet
@@ -54,11 +54,20 @@ jobs:
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
-    # Шаг 5: Запуск компиляции в Docker
-    - name: Run Build Script in Docker
+    # Шаг 4: Сборка Docker-образа
+    - name: Build Docker Image
       run: |
-        chmod +x build-pitrezor.sh
-        sudo ./build-pitrezor.sh master raspberrypi0-wifi
+        docker build -t yocto-builder .
+
+    # Шаг 5: Запуск компиляции ВНУТРИ Docker-контейнера
+    - name: Run Build Script inside Docker
+      run: |
+        # Прокидываем текущую папку проекта внутрь контейнера, чтобы скрипт работал с исходниками
+        docker run --rm \
+          -v ${{ github.workspace }}:/home/build/yocto-pitrezor \
+          -w /home/build/yocto-pitrezor \
+          yocto-builder \
+          ./build-pitrezor.sh master raspberrypi0-wifi
 
     # Шаг 6: Сохранение готового образа
     - name: Upload Artifact
@@ -66,5 +75,3 @@ jobs:
       with:
         name: pitrezor-rpi0-image
         path: imgs/*.zip
-
-
