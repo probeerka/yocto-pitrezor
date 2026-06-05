@@ -59,20 +59,17 @@ jobs:
       run: |
         docker build -t yocto-builder .
 
-    # Шаг 5: Запуск компиляции ВНУТРИ Docker-контейнера с правами текущего пользователя хоста
+    # Шаг 5: Запуск компиляции ВНУТРИ Docker-контейнера от root с исправлением прав в конце
     - name: Run Build Script inside Docker
       run: |
-        # Определяем UID и GID текущего пользователя на хосте GitHub Actions
-        USER_ID=$(id -u)
-        GROUP_ID=$(id -g)
-        
-        # Запускаем контейнер, сопоставляя права, чтобы не было ошибки Permission denied
+        # Запускаем от root, чтобы chown и внутренние скрипты работали без ошибок
         docker run --rm \
-          -u $USER_ID:$GROUP_ID \
+          -u 0:0 \
           -v ${{ github.workspace }}:/home/build/yocto-pitrezor \
           -w /home/build/yocto-pitrezor \
           yocto-builder \
-          ./build-pitrezor.sh master raspberrypi0-wifi
+          /bin/bash -c "./build-pitrezor.sh master raspberrypi0-wifi && chown -R $(id -u):$(id -g) ."
+
 
 
     # Шаг 6: Сохранение готового образа
