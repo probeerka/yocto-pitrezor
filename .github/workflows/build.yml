@@ -8,45 +8,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # Шаг 1: Скачивание основного репозитория
+    # Шаг 1: Скачивание основного репозитория проекта
     - name: Checkout repository
       uses: actions/checkout@v4
-      with:
-        submodules: false # Отключаем автоматический синк на хосте, сделаем это правильно
 
-    # Шаг 2: Полная перезапись Dockerfile на базе стабильной Ubuntu 22.04
-    - name: Rewrite Dockerfile with modern base image
+    # Шаг 2: Глобальная замена протокола git:// на https:// на самом хосте GitHub
+    - name: Configure Git to use HTTPS instead of GIT protocol
       run: |
-        cat << 'EOF' > Dockerfile
-        FROM ubuntu:22.04
+        git config --global url."https://".insteadOf git://
 
-        ENV DEBIAN_FRONTEND=noninteractive
-
-        # Обновляем систему и ставим актуальные пакеты сборки Yocto + sudo
-        RUN apt-get update && \
-            apt-get install -y gawk wget git diffstat unzip texinfo gcc-multilib build-essential \
-            chrpath socat cpio python3 python3-pip python3-pexpect xz-utils debianutils \
-            iputils-ping locales liblz4-tool zstd python-is-python3 sudo
-
-        # Настройка локали en_US.UTF-8 (обязательно для BitBake)
-        RUN locale-gen en_US.UTF-8
-        ENV LC_ALL=en_US.UTF-8
-        ENV LANG=en_US.UTF-8
-        ENV LANGUAGE=en_US.UTF-8
-
-        # Создаем изолированного пользователя для сборки (BitBake запрещено пускать под root)
-        RUN useradd -m -s /bin/bash build && \
-            echo "build ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-
-        USER build
-        ENV HOME=/home/build
-        WORKDIR /home/build
-
-        # Принудительный обход заблокированного git:// протокола ДЛЯ ПОЛЬЗОВАТЕЛЯ build
-        RUN git config --global url."https://".insteadOf git://
-        EOF
-
-    # Шаг 3: Очистка диска
+    # Шаг 3: Очистка диска (сборка Yocto требует много свободного места)
     - name: Free up disk space
       run: |
         sudo rm -rf /usr/share/dotnet
@@ -54,27 +25,27 @@ jobs:
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
-    # Шаг 4: Сборка Docker-образа
-    - name: Build Docker Image
+    # Шаг 4: Модификация встроенного Dockerfile самого проекта yocto-pitrezor
+    # Внедряем фикс Git прямо в контейнер, который будет собирать скрипт
+    - name: Inject Git fix into internal project Dockerfile
       run: |
-        docker build -t yocto-builder .
+        if [ -f Dockerfile ]; then
+          echo 'RUN git config --global url."https://".insteadOf git://' >> Dockerfile
+          echo "=== Встроенный Dockerfile успешно модифицирован ==="
+        else
+          echo "Внимание: Файл Dockerfile не найден!"
+        fi
 
-    # Шаг 5: Запуск компиляции ВНУТРИ Docker-контейнера от root с исправлением прав в конце
-    - name: Run Build Script inside Docker
+    # Шаг 5: Запуск родного скрипта компиляции с принудительным сохранением PATH для Docker
+    - name: Run Build Script
       run: |
-        # Запускаем от root, чтобы chown и внутренние скрипты работали без ошибок
-        docker run --rm \
-          -u 0:0 \
-          -v ${{ github.workspace }}:/home/build/yocto-pitrezor \
-          -w /home/build/yocto-pitrezor \
-          yocto-builder \
-          /bin/bash -c "./build-pitrezor.sh master raspberrypi0-wifi && chown -R $(id -u):$(id -g) ."
-
-
+        chmod +x build-pitrezor.sh
+        # Флаг sudo -E принудительно прокидывает окружение пользователя (включая путь к docker) внутрь sudo
+        sudo -E ./build-pitrezor.sh master raspberrypi0-wifi
 
     # Шаг 6: Сохранение готового образа
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: pitrezor-rpi0-image
-        path: imgs/*.zip
+        path: build/*.zip  # Скрипт упаковывает результат в директорию build/
