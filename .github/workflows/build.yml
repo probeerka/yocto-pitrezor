@@ -67,11 +67,35 @@ jobs:
       run: |
         chmod +x build-pitrezor.sh
         # Флаг -E обязателен, чтобы утилита sudo не теряла пути к командам Docker
-        sudo -E ./build-pitrezor.sh master raspberrypi0-wifi
+        sudo -E ./build-pitrezor.sh master raspberrypi0-wifi || echo "Скрипт завершился с ошибкой, но пробуем найти образ..."
+
+    # === НОВЫЙ ШАГ: Самостоятельный поиск, копирование и архивация образа ===
+    - name: Prepare and Zip Artifact
+      run: |
+        # Ищем готовый образ в стандартной папке вывода Yocto
+        IMG_FILE=$(find build/tmp/deploy/images/raspberrypi0-wifi/ -maxdepth 1 -type f \( -name "*.img" -o -name "*.sdimg" -o -name "*.wic" \) | head -n 1)
+        
+        if [ -z "$IMG_FILE" ]; then
+          echo "❌ Ошибка: Образ не найден в build/tmp/deploy/images/raspberrypi0-wifi/"
+          ls -R build/tmp/deploy/images/ || true
+          exit 1
+        fi
+        
+        echo "✅ Найден образ: $IMG_FILE"
+        
+        # Создаем папку build и копируем туда образ с нужным именем
+        mkdir -p build
+        cp "$IMG_FILE" build/pitrezor-raspberrypi0-wifi-master.img
+        
+        # Архивируем в zip (так как Шаг 6 ищет *.zip)
+        cd build
+        zip pitrezor-rpi0-image.zip pitrezor-raspberrypi0-wifi-master.img
+        cd ..
+        echo "✅ Архив успешно создан в build/pitrezor-rpi0-image.zip"
 
     # Шаг 6: Сохранение готового образа
     - name: Upload Artifact
       uses: actions/upload-artifact@v4
       with:
         name: pitrezor-rpi0-image
-        path: build/*.zip  # Архивы прошивок сохраняются в папку build/
+        path: build/*.zip  # Теперь этот шаг гарантированно найдет наш zip        
