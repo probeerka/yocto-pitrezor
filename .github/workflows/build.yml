@@ -25,22 +25,49 @@ jobs:
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
-    # Шаг 4: Модификация встроенного Dockerfile самого проекта yocto-pitrezor
-    # Внедряем фикс Git прямо в контейнер, который будет собирать скрипт
-    - name: Inject Git fix into internal project Dockerfile
+    # Шаг 4: Полная перезапись встроенного Dockerfile правильным и современным окружением
+    # Убираем несуществующий пакет 'python' и добавляем костыль для git:// протокола
+    - name: Rewrite internal project Dockerfile
       run: |
-        if [ -f Dockerfile ]; then
-          echo 'RUN git config --global url."https://".insteadOf git://' >> Dockerfile
-          echo "=== Встроенный Dockerfile успешно модифицирован ==="
-        else
-          echo "Внимание: Файл Dockerfile не найден!"
-        fi
+        cat << 'EOF' > Dockerfile
+        FROM ubuntu:22.04
 
-    # Шаг 5: Запуск родного скрипта компиляции с принудительным сохранением PATH для Docker
+        # Отключаем интерактивные диалоги
+        ENV DEBIAN_FRONTEND=noninteractive
+
+        # Ставим пакеты (заменили старый 'python' на 'python-is-python3')
+        RUN apt-get update && apt-get install -y \
+            gawk wget git-core diffstat unzip texinfo gcc-multilib build-essential \
+            chrpath socat cpio python3 python3-pip python3-pexpect xz-utils \
+            debianutils iputils-ping locales liblz4-tool zstd python-is-python3 sudo
+
+        # Настраиваем локали для корректной работы BitBake
+        RUN locale-gen en_US.UTF-8
+        ENV LC_ALL=en_US.UTF-8
+        ENV LANG=en_US.UTF-8
+        ENV LANGUAGE=en_US.UTF-8
+
+        # Настраиваем безопасный обход протокола git:// для всех пользователей контейнера
+        RUN git config --global url."https://".insteadOf git://
+
+        # Создаем пользователя build и даем ему права sudo (некоторые скрипты могут требовать root-действий)
+        RUN useradd -m -s /bin/bash build && \
+            echo "build ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+        USER build
+        ENV HOME=/home/build
+        WORKDIR /home/build
+
+        # Продублируем глобальную настройку Git для созданного пользователя build
+        RUN git config --global url."https://".insteadOf git://
+        EOF
+        echo "=== Встроенный Dockerfile успешно обновлен на Ubuntu 22.04 ==="
+
+    # Шаг 5: Запуск родного скрипта компиляции проекта с пробросом окружения Docker
     - name: Run Build Script
       run: |
         chmod +x build-pitrezor.sh
-        # Флаг sudo -E принудительно прокидывает окружение пользователя (включая путь к docker) внутрь sudo
+        # Флаг -E обязателен, чтобы утилита sudo не теряла пути к командам Docker
         sudo -E ./build-pitrezor.sh master raspberrypi0-wifi
 
     # Шаг 6: Сохранение готового образа
@@ -48,4 +75,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: pitrezor-rpi0-image
-        path: build/*.zip  # Скрипт упаковывает результат в директорию build/
+        path: build/*.zip  # Архивы прошивок сохраняются в папку build/
