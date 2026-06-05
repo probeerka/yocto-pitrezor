@@ -25,8 +25,7 @@ jobs:
         sudo rm -rf "/usr/local/share/boost"
         sudo rm -rf "$AGENT_TOOLSDIRECTORY"
 
-    # Шаг 4: Полная перезапись встроенного Dockerfile правильным и современным окружением
-    # Убираем несуществующий пакет 'python' и добавляем костыль для git:// протокола
+       # Шаг 4: Полная перезапись встроенного Dockerfile правильным и современным окружением
     - name: Rewrite internal project Dockerfile
       run: |
         cat << 'EOF' > Dockerfile
@@ -35,11 +34,11 @@ jobs:
         # Отключаем интерактивные диалоги
         ENV DEBIAN_FRONTEND=noninteractive
 
-        # Ставим пакеты (заменили старый 'python' на 'python-is-python3')
+        # Ставим пакеты (добавлен обязательный пакет 'file')
         RUN apt-get update && apt-get install -y \
             gawk wget git-core diffstat unzip texinfo gcc-multilib build-essential \
             chrpath socat cpio python3 python3-pip python3-pexpect xz-utils \
-            debianutils iputils-ping locales liblz4-tool zstd python-is-python3 sudo
+            debianutils iputils-ping locales liblz4-tool zstd python-is-python3 sudo file
 
         # Настраиваем локали для корректной работы BitBake
         RUN locale-gen en_US.UTF-8
@@ -50,7 +49,7 @@ jobs:
         # Настраиваем безопасный обход протокола git:// для всех пользователей контейнера
         RUN git config --global url."https://".insteadOf git://
 
-        # Создаем пользователя build и даем ему права sudo (некоторые скрипты могут требовать root-действий)
+        # Создаем пользователя build и даем ему права sudo
         RUN useradd -m -s /bin/bash build && \
             echo "build ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
@@ -61,8 +60,8 @@ jobs:
         # Продублируем глобальную настройку Git для созданного пользователя build
         RUN git config --global url."https://".insteadOf git://
         EOF
-        echo "=== Встроенный Dockerfile успешно обновлен на Ubuntu 22.04 ==="
-
+        echo "=== Встроенный Dockerfile успешно обновлен на Ubuntu 22.04 (добавлен пакет file) ==="
+        
     # Шаг 5: Запуск родного скрипта компиляции проекта с пробросом окружения Docker
     - name: Run Build Script
       run: |
