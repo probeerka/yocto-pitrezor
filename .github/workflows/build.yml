@@ -5,106 +5,87 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
-    # Шаг 1: Скачивание основного репозитория проекта
-    - name: Checkout repository
+    # Шаг 1: Скачиваем ВАШ репозиторий (нужен только для custom-local.conf)
+    - name: Checkout your repository
       uses: actions/checkout@v4
 
-    # Шаг 2: Глобальная замена протокола git:// на https:// на самом хосте GitHub
-    - name: Configure Git to use HTTPS instead of GIT protocol
+    # Шаг 2: Устанавливаем зависимости Yocto
+    - name: Install Yocto dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+            gawk wget git diffstat unzip texinfo gcc-multilib build-essential \
+            chrpath socat cpio python3 python3-pip python3-pexpect xz-utils \
+            debianutils iputils-ping locales liblz4-tool zstd python-is-python3 \
+            python3-jinja2 python3-git libegl1-mesa libsdl1.2-dev python3-subunit \
+            mesa-common-dev file
+        sudo locale-gen en_US.UTF-8
+
+    # Шаг 3: Клонируем ОРИГИНАЛЬНЫЙ репозиторий PiTrezor
+    - name: Clone original PiTrezor repository
       run: |
         git config --global url."https://".insteadOf git://
+        git clone https://github.com/heneault/yocto-pitrezor.git pitrezor-build
+        cd pitrezor-build
+        git submodule update --init --recursive
+        echo "✅ Original repository cloned"
 
-    # Шаг 3: Очистка диска (сборка Yocto требует много свободного места)
-    - name: Free up disk space
+    # Шаг 4: Подменяем local.conf на ваш
+    - name: Replace local.conf with custom version
       run: |
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /opt/ghc
-        sudo rm -rf "/usr/local/share/boost"
-        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-
-       # Шаг 4: Полная перезапись встроенного Dockerfile правильным и современным окружением
-    - name: Rewrite internal project Dockerfile
-      run: |
-        cat << 'EOF' > Dockerfile
-        FROM ubuntu:22.04
-
-        # Отключаем интерактивные диалоги
-        ENV DEBIAN_FRONTEND=noninteractive
-
-        # Ставим пакеты (добавлен обязательный пакет 'file')
-        RUN apt-get update && apt-get install -y \
-            gawk wget git-core diffstat unzip texinfo gcc-multilib build-essential \
-            chrpath socat cpio python3 python3-pip python3-pexpect xz-utils \
-            debianutils iputils-ping locales liblz4-tool zstd python-is-python3 sudo file
-
-        # Настраиваем локали для корректной работы BitBake
-        RUN locale-gen en_US.UTF-8
-        ENV LC_ALL=en_US.UTF-8
-        ENV LANG=en_US.UTF-8
-        ENV LANGUAGE=en_US.UTF-8
-
-        # Настраиваем безопасный обход протокола git:// для всех пользователей контейнера
-        RUN git config --global url."https://".insteadOf git://
-
-        # Создаем пользователя build и даем ему права sudo
-        RUN useradd -m -s /bin/bash build && \
-            echo "build ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
-
-        USER build
-        ENV HOME=/home/build
-        WORKDIR /home/build
-
-        # Продублируем глобальную настройку Git для созданного пользователя build
-        RUN git config --global url."https://".insteadOf git://
-        EOF
-        echo "=== Встроенный Dockerfile успешно обновлен на Ubuntu 22.04 (добавлен пакет file) ==="
-        
-    # Шаг 5: Запуск родного скрипта компиляции проекта с пробросом окружения Docker
-    - name: Run Build Script
-      run: |
-        chmod +x build-pitrezor.sh
-        # Флаг -E обязателен, чтобы утилита sudo не теряла пути к командам Docker
-        sudo -E ./build-pitrezor.sh master raspberrypi0-wifi || echo "Скрипт завершился с ошибкой, но пробуем найти образ..."
-
- # === ИСПРАВЛЕННЫЙ ШАГ: Ищем образ в папке imgs/ ===
-    - name: Prepare and Zip Artifact
-      run: |
-        echo "=== Содержимое текущей директории ==="
-        ls -la
-        
-        echo "=== Содержимое папки imgs/ ==="
-        ls -la imgs/ || echo "⚠️ Папка imgs/ не найдена!"
-        
-        # Скрипт build-pitrezor.sh сохраняет образ в папку imgs/
-        # И сразу создает zip архив
-        if [ -f "imgs/pitrezor-raspberrypi0-wifi-master.zip" ]; then
-          echo "✅ Найден готовый zip архив: imgs/pitrezor-raspberrypi0-wifi-master.zip"
-          mkdir -p build
-          cp imgs/pitrezor-raspberrypi0-wifi-master.zip build/
-        elif [ -f "imgs/pitrezor-raspberrypi0-wifi-master.img" ]; then
-          echo "✅ Найден образ: imgs/pitrezor-raspberrypi0-wifi-master.img"
-          mkdir -p build
-          cp imgs/pitrezor-raspberrypi0-wifi-master.img build/
-          cd build
-          zip pitrezor-rpi0-image.zip pitrezor-raspberrypi0-wifi-master.img
-          cd ..
-        else
-          echo "❌ Ошибка: Образ не найден в папке imgs/"
-          echo "=== Проверка других возможных локаций ==="
-          find . -name "*.img" -o -name "*.zip" -o -name "*.wic" 2>/dev/null | head -20
+        # Проверяем, что custom-local.conf существует
+        if [ ! -f "custom-local.conf" ]; then
+          echo "❌ Ошибка: файл custom-local.conf не найден в корне репозитория"
           exit 1
         fi
         
-        echo "✅ Архив подготовлен в build/"
-        ls -la build/
+        # Инициализируем build-окружение (создает папку build/conf/)
+        cd pitrezor-build
+        source poky/oe-init-build-env build
+        
+        # Подменяем local.conf
+        cp ../custom-local.conf conf/local.conf
+        echo "✅ local.conf replaced with custom version"
+        cat conf/local.conf
 
+    # Шаг 5: Запускаем сборку
+    - name: Build image
+      run: |
+        cd pitrezor-build
+        source poky/oe-init-build-env build
+        
+        # Собираем образ для raspberrypi0-wifi
+        bitbake pitrezor-image
+        
+        echo "✅ Build completed"
 
-    # Шаг 6: Сохранение готового образа
-    - name: Upload Artifact
+    # Шаг 6: Находим и архивируем готовый образ
+    - name: Prepare artifact
+      run: |
+        cd pitrezor-build
+        
+        # Ищем готовый образ
+        IMG_FILE=$(find build/tmp/deploy/images/raspberrypi0-wifi -name "*.img" -o -name "*.wic" -o -name "*.rpi-sdimg" 2>/dev/null | head -1)
+        
+        if [ -n "$IMG_FILE" ]; then
+          echo "✅ Найден образ: $IMG_FILE"
+          mkdir -p ../artifact
+          cp "$IMG_FILE" ../artifact/
+          cd ../artifact
+          zip pitrezor-image.zip $(basename "$IMG_FILE")
+        else
+          echo "❌ Образ не найден"
+          find build/tmp/deploy/images/ -type f | head -20
+          exit 1
+        fi
+
+    # Шаг 7: Загружаем артефакт
+    - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: pitrezor-rpi0-image
-        path: build/*.zip  # Теперь этот шаг гарантированно найдет наш zip        
+        name: pitrezor-image
+        path: artifact/*.zip
+        retention-days: 7
