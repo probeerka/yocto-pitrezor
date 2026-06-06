@@ -28,7 +28,7 @@ jobs:
     - name: Clone original PiTrezor repository
       run: |
         git config --global url."https://".insteadOf git://
-        git clone https://github.com/heneault/yocto-pitrezor.git pitrezor-build
+        git clone https://github.com/probeerka/yocto-pitrezor.git pitrezor-build
         cd pitrezor-build
         git submodule update --init --recursive
         echo "✅ Original repository cloned"
