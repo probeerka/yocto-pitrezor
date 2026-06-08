@@ -17,7 +17,7 @@ S = "${WORKDIR}/git"
 inherit cmake
 
 EXTRA_OECMAKE = "-DST7789VW=ON \
-                 -DGPIO_TFT_DATA_COMMAND=25 \
+                 -DGPIO_TFT_DATA_CONTROL=25 \
                  -DGPIO_TFT_RESET_PIN=27 \
                  -DGPIO_TFT_BACKLIGHT=24 \
                  -DDISPLAY_WIDTH=320 \
