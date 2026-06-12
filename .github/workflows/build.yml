@@ -8,11 +8,9 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    # Шаг 1: Скачиваем ВАШ репозиторий (нужен только для custom-local.conf)
     - name: Checkout your repository
       uses: actions/checkout@v4
 
-    # Шаг 2: Устанавливаем зависимости Yocto
     - name: Install Yocto dependencies
       run: |
         sudo apt-get update
@@ -23,35 +21,11 @@ jobs:
             python3-jinja2 python3-git libegl1-mesa libsdl1.2-dev python3-subunit \
             mesa-common-dev file
         sudo locale-gen en_US.UTF-8
-
-    # Шаг 3: Клонируем ОРИГИНАЛЬНЫЙ репозиторий PiTrezor
-    - name: Clone original PiTrezor repository
-      run: |
-        git config --global url."https://".insteadOf git://
-        git clone https://github.com/probeerka/yocto-pitrezor.git pitrezor-build
-        cd pitrezor-build
-        git submodule update --init --recursive
-        echo "✅ Original repository cloned"
-
-    # Шаг 4: Подменяем local.conf на ваш
-    - name: Replace local.conf with custom version
-      run: |
-        # Проверяем, что custom-local.conf существует
-        if [ ! -f "custom-local.conf" ]; then
-          echo "❌ Ошибка: файл custom-local.conf не найден в корне репозитория"
-          exit 1
-        fi
         
         # Инициализируем build-окружение (создает папку build/conf/)
         cd pitrezor-build
         source poky/oe-init-build-env build
         
-        # Подменяем local.conf
-        cp ../custom-local.conf conf/local.conf
-        echo "✅ local.conf replaced with custom version"
-        cat conf/local.conf
-
-    # Шаг 5: Запускаем сборку
     - name: Build image
       run: |
         cd pitrezor-build
@@ -62,7 +36,6 @@ jobs:
         
         echo "✅ Build completed"
 
-    # Шаг 6: Находим и архивируем готовый образ
     - name: Prepare artifact
       run: |
         cd pitrezor-build
