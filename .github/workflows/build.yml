@@ -30,9 +30,6 @@ jobs:
           # Инициализация окружения (создаст папку build и перейдет в нее)
           source poky/oe-init-build-env build
           
-          # ВАЖНО: замените 'meta-pitrezor' на реальное имя вашей папки с рецептами!
-          bitbake-layers add-layer ../meta-pitrezor
-          
           # Запуск сборки
           bitbake pitrezor-image
           
