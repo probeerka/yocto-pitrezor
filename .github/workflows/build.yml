@@ -19,15 +19,49 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Debug Show repo structure
-        run: |
-          echo "=== ROOT CONTENTS ==="
-          ls -la
-          echo ""
-          echo "=== LOOKING FOR POKY BUILD META ==="
-          find . -maxdepth 2 -type d -name "*poky*" -o -name "*build*" -o -name "*meta*"
-
       - name: Install Yocto dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y gawk wget git diffstat unzip texinfo gcc-multilib build-essential chrpath socat cpio python3 python3-pip python3-p
+          sudo apt-get install -y gawk wget git diffstat unzip texinfo gcc-multilib build-essential chrpath socat cpio python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping locales liblz4-tool zstd python-is-python3 python3-jinja2 python3-git libegl1-mesa libsdl1.2-dev python3-subunit mesa-common-dev file
+          sudo locale-gen en_US.UTF-8
+
+      - name: Build image
+        run: |
+          # Инициализация окружения (создаст папку build и перейдет в нее)
+          source poky/oe-init-build-env build
+          
+          # Добавляем необходимые слои в конфигурацию сборки
+          bitbake-layers add-layer ../meta-raspberrypi
+          bitbake-layers add-layer ../meta-openembedded/meta-oe
+          bitbake-layers add-layer ../meta-openembedded/meta-python
+          
+          # ВАЖНО: замените 'meta-pitrezor' на реальное имя вашей папки с рецептами!
+          bitbake-layers add-layer ../meta-pitrezor
+          
+          # Запуск сборки
+          bitbake pitrezor-image
+          
+          echo "✅ Build completed"
+
+      - name: Prepare artifact
+        run: |
+          IMG_FILE=$(find build/tmp/deploy/images/raspberrypi0-wifi -name "*.img" -o -name "*.wic" -o -name "*.rpi-sdimg" 2>/dev/null | head -1)
+          
+          if [ -n "$IMG_FILE" ]; then
+            echo "✅ Найден образ: $IMG_FILE"
+            mkdir -p artifact
+            cp "$IMG_FILE" artifact/
+            cd artifact
+            zip pitrezor-image.zip $(basename "$IMG_FILE")
+          else
+            echo "❌ Образ не найден, ищем что есть в папке deploy:"
+            find build/tmp/deploy/images/ -type f | head -20
+            exit 1
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pitrezor-image
+          path: artifact/*.zip
+          retention-days: 7
