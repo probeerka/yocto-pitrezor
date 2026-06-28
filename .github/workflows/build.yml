@@ -13,7 +13,7 @@ jobs:
       with:
         submodules: recursive # На всякий случай пробуем скачать сабмодули
 
-    - name: Debug: Show repo structure
+    - name: Show repo structure
       run: |
         echo "=== СОДЕРЖИМОЕ КОРНЕВОЙ ПАПКИ ==="
         ls -la
