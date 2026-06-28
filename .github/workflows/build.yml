@@ -1,4 +1,4 @@
-name: Build PiTrezor Image
+name: Build PiTrezor Image (DEBUG)
 
 on:
   workflow_dispatch:
