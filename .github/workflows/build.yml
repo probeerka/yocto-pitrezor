@@ -30,11 +30,6 @@ jobs:
           # Инициализация окружения (создаст папку build и перейдет в нее)
           source poky/oe-init-build-env build
           
-          # Добавляем необходимые слои в конфигурацию сборки
-          bitbake-layers add-layer ../meta-raspberrypi
-          bitbake-layers add-layer ../meta-openembedded/meta-oe
-          bitbake-layers add-layer ../meta-openembedded/meta-python
-          
           # ВАЖНО: замените 'meta-pitrezor' на реальное имя вашей папки с рецептами!
           bitbake-layers add-layer ../meta-pitrezor
           
