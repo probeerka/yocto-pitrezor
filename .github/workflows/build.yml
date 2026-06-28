@@ -57,3 +57,33 @@ jobs:
         name: pitrezor-image
         path: artifact/*.zip
         retention-days: 7
+
+name: Build PiTrezor Image (DEBUG)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout your repository
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive # На всякий случай пробуем скачать сабмодули
+
+    - name: Debug: Show repo structure
+      run: |
+        echo "=== СОДЕРЖИМОЕ КОРНЕВОЙ ПАПКИ ==="
+        ls -la
+        echo ""
+        echo "=== ПОИСК ПАПОК POKY, BUILD И META ==="
+        find . -maxdepth 3 -type d -name "*poky*" -o -name "*build*" -o -name "*meta*"
+
+    # Дальше идет обычная установка (пока без сборки, чтобы не ждать долго)
+    - name: Install Yocto dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gawk wget git diffstat unzip texinfo gcc-multilib build-essential chrpath socat cpio python3 python3-pip python3-pexpect xz-utils debianutils iputils-ping locales liblz4-tool zstd python-is-python3 python3-jinja2 python3-git libegl1-mesa libsdl1.2-dev python3-subunit mesa-common-dev file
+        sudo locale-gen en_US.UTF-8
