@@ -21,14 +21,10 @@ jobs:
             python3-jinja2 python3-git libegl1-mesa libsdl1.2-dev python3-subunit \
             mesa-common-dev file
         sudo locale-gen en_US.UTF-8
-        
-        # Инициализируем build-окружение (создает папку build/conf/)
-        cd pitrezor-build
-        source poky/oe-init-build-env build
-        
+
     - name: Build image
       run: |
-        cd pitrezor-build
+        # REMOVED cd pitrezor-build
         source poky/oe-init-build-env build
         
         # Собираем образ для raspberrypi0-wifi
@@ -38,16 +34,16 @@ jobs:
 
     - name: Prepare artifact
       run: |
-        cd pitrezor-build
+        # УБРАН cd pitrezor-build
         
         # Ищем готовый образ
         IMG_FILE=$(find build/tmp/deploy/images/raspberrypi0-wifi -name "*.img" -o -name "*.wic" -o -name "*.rpi-sdimg" 2>/dev/null | head -1)
         
         if [ -n "$IMG_FILE" ]; then
           echo "✅ Найден образ: $IMG_FILE"
-          mkdir -p ../artifact
-          cp "$IMG_FILE" ../artifact/
-          cd ../artifact
+          mkdir -p artifact
+          cp "$IMG_FILE" artifact/
+          cd artifact
           zip pitrezor-image.zip $(basename "$IMG_FILE")
         else
           echo "❌ Образ не найден"
@@ -55,7 +51,6 @@ jobs:
           exit 1
         fi
 
-    # Шаг 7: Загружаем артефакт
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
